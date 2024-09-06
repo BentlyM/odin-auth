@@ -4,6 +4,7 @@ import session from 'express-session';
 import passport from 'passport';
 import path from 'path';
 import { Strategy as LocalStrategy } from 'passport-local';
+import bcrypt from 'bcryptjs';
 
 const pool = new Pool({
   host: '127.0.0.1',
@@ -41,10 +42,14 @@ app.get('/sign-up', (req, res) => res.render('sign-up-form'));
 
 app.post('/sign-up', async (req, res, next) => {
   try {
-    await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', [
-      req.body.username,
-      req.body.password,
-    ]);
+    bcrypt.hash(req.body.password, 10, async (err, hashedPassword) => {
+      if (err) throw new Error(`Something went wrong: ${err.stack}`);
+
+      await pool.query(
+        'INSERT INTO users (username, password) VALUES ($1, $2)',
+        [req.body.username, hashedPassword]
+      );
+    });
     res.redirect('/');
   } catch (err) {
     return next(err);
@@ -59,15 +64,19 @@ app.post(
   })
 );
 
-app.get("/log-out", (req, res, next) => {
+app.get('/log-out', (req, res, next) => {
   req.logout((err) => {
     if (err) {
       return next(err);
     }
-    res.redirect("/");
+    res.redirect('/');
   });
 });
 
+type User = {
+  username: string;
+  password: string;
+};
 
 passport.use(
   new LocalStrategy(async (username, password, done) => {
@@ -76,12 +85,15 @@ passport.use(
         'SELECT * FROM users WHERE username = $1',
         [username]
       );
-      const user = rows[0];
+
+      const user: User = rows[0];
 
       if (!user) {
         return done(null, false, { message: 'Incorrect username' });
       }
-      if (user.password !== password) {
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        // passwords do not match!
         return done(null, false, { message: 'Incorrect password' });
       }
       return done(null, user);
@@ -92,16 +104,18 @@ passport.use(
 );
 
 passport.serializeUser((user, done) => {
-  done(null, (user as {id: number}).id);
+  done(null, (user as { id: number }).id);
 });
 
 passport.deserializeUser(async (id: number, done) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [id]);
-    const user = rows[0];
+    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [
+      id,
+    ]);
+    const user: User = rows[0];
 
     done(null, user);
-  } catch(err) {
+  } catch (err) {
     done(err);
   }
 });
