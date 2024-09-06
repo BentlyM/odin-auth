@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import passport from 'passport';
 import path from 'path';
@@ -34,13 +34,13 @@ app.use(session({ secret: 'cats', resave: false, saveUninitialized: false }));
 app.use(passport.session());
 app.use(express.urlencoded({ extended: false }));
 
-app.get('/', (req, res) => {
+app.get('/', (req : Request, res : Response) => {
   res.render('index', { user: req.user });
 });
 
-app.get('/sign-up', (req, res) => res.render('sign-up-form'));
+app.get('/sign-up', (req : Request, res : Response) => res.render('sign-up-form'));
 
-app.post('/sign-up', async (req, res, next) => {
+app.post('/sign-up', async (req : Request, res: Response, next: NextFunction) => {
   try {
     bcrypt.hash(req.body.password, 10, async (err, hashedPassword) => {
       if (err) throw new Error(`Something went wrong: ${err.stack}`);
@@ -64,7 +64,7 @@ app.post(
   })
 );
 
-app.get('/log-out', (req, res, next) => {
+app.get('/log-out', (req : Request, res: Response, next: NextFunction) => {
   req.logout((err) => {
     if (err) {
       return next(err);
